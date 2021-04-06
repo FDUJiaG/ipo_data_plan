@@ -1,0 +1,64 @@
+# 托管平台识别
+def station_confirm(file):
+    '''
+    返回托管平台类别，返回值为平台名称拼音首字母
+    '''
+    data = pd.read_excel(file)
+    if str(data[data.columns[0]][0]).find('东风6号') >-1:
+        return 'zj'
+    elif str(data[data.columns[0]][0]).find('中信建投') > -1:
+        return 'zxjt'
+    elif str(data[data.columns[0]][0]).find('中泰证券股份有限公司') > -1:
+        return 'zt'
+    elif str(data[data.columns[0]][0]).find('兴业证券') > -1:
+        return 'xy'
+    elif str(data[data.columns[0]][1]).find('华泰证券') > -1:
+        return 'ht'
+    elif str(data[data.columns[0]][0]).find('国泰君安') > -1:
+        return 'gj'
+    elif str(data[data.columns[0]][1]).find('招商证券') > -1:
+        return 'zs'
+    elif str(data[data.columns[0]][1]).find('申万宏源证券') > -1:
+        return 'sw'
+    elif str(data[data.columns[0]][1]).find('银河证券') > -1:
+        return 'yh'
+    else:
+        return 'zx'
+
+# 文件扫描
+def file_scan(data_path):
+    # 返回目标路径下所有三级文件
+    file_list = []
+    walker = os.walk(data_path)
+    for each in walker:
+        for file in each[2]:
+            if os.path.exists(each[0]+file):
+                file_list.append(each[0]+file)
+            else:
+                file_list.append(each[0]+'\\'+file)
+    return file_list
+
+# 数据提取
+def data_extract(file,station):
+    target_list = []
+    if station=='zj':
+        return read_data_zj(file)
+    elif station =='zxjt':
+        return read_data_zxjt(file)
+    elif station == 'zx':
+        return read_data_zx(file)
+    elif station == 'zt':
+        return read_data_zt(file)
+    elif station == 'xy':
+        return read_data_xy(file)
+    elif station == 'ht':
+        return read_data_ht(file)
+    elif station == 'gj':
+        return read_data_gj(file)
+    elif station == 'zs':
+        return read_data_zs(file)
+    elif station == 'sw':
+        return []
+    else:
+        time.sleep(3600)
+        return []
