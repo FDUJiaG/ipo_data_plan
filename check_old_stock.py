@@ -3,8 +3,8 @@ import time
 import datetime
 import json
 import pandas as pd
-from ns_w_assign import get_data_list, print_info
-from common_utils import station_confirm, station_head_dict, self_operation
+from ipo_week_assign import get_data_list, print_info
+from common_utils import station_confirm, station_head_dict, station_num_list_dict, self_operation
 
 import warnings
 
@@ -108,7 +108,7 @@ def main():
             print("ignore the file {}".format(file_list_copy[idx]))
         cp_temp = cp_name
 
-    check_col = ["product", "stock code", "stock name", "base date"]
+    check_col = ["product", "stock code", "stock name", "stock num", "base date"]
     df_check = pd.DataFrame(columns=check_col)
     station_dict = dict()
 
@@ -128,14 +128,15 @@ def main():
         else:
             base_date = "".join(date_tmp[-6:])
 
-        target_list = data_extract(file_item, station, station_head_dict)
-        for target_item in target_list:
+        target_list, number_list = data_extract(file_item, station, station_head_dict, station_num_list_dict)
+        for target_item, number_item in zip(target_list, number_list):
             if target_item in stock_dict.keys():
                 df_check = df_check.append(
                     {
                         "product": cp_name,
                         "stock code": target_item,
                         "stock name": stock_dict[target_item],
+                        "stock num": number_item,
                         "base date": base_date
                     },
                     ignore_index=True
@@ -182,21 +183,27 @@ def file_scan(data_path, ignore="history"):
     return file_list
 
 
-def data_extract(file, station, head_dict):
-    target_list = []
-
+def data_extract(file, station, head_dict, num_list_dict):
+    target_list = list()
+    stock_num_list =list()
     # 对于每一个估值表， 检查第一列
     df = pd.read_excel(file, header=head_dict[station])
+    # 获取表头列
     check_col = df.columns[0]
-    check_list = list(df[check_col][df[check_col].notna()])
+    # 获取数据列
+    num_col = df.columns[num_list_dict[station]]
+    df_tmp = df[[check_col, num_col]].dropna()
+    check_list = list(df_tmp[check_col])
+    num_list = list(df_tmp[num_col])
 
-    for check_item in check_list:
+    for check_item, num_item in zip(check_list, num_list):
         digit_item = "".join(list(filter(str.isdigit, str(check_item))))
         # digit_item = "".join(list(filter(lambda ch: ch in "0123456789", check_item)))
         if len(digit_item) >= 12:
             target_list.append(digit_item[-6:])
+            stock_num_list.append(num_item)
 
-    return target_list
+    return target_list, stock_num_list
 
 
 def drop_self_op(df, del_lst, chk_col):

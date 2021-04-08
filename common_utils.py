@@ -73,6 +73,20 @@ station_head_dict = {
     "yh": [4, 5, 6]
 }
 
+# 数目在字典中位置
+station_num_list_dict = {
+    "gj": 2,
+    "xy": 2,
+    "zxjt": 2,
+    "zx": 4,
+    "zt": 2,
+    "ht": 4,
+    "zs": 4,
+    "df": 2,
+    "zj": 2,
+    "yh": 1
+}
+
 # 净资产位置
 net_asset_loc_dict = {
     "gj": ["基金资产净值:", "市值"],
