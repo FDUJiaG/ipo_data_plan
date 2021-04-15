@@ -84,7 +84,7 @@ station_num_list_dict = {
     "zs": 4,
     "df": 2,
     "zj": 2,
-    "yh": 1
+    "yh": 2
 }
 
 # 净资产位置

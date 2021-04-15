@@ -27,7 +27,7 @@ def main():
         return False
 
     op_dict = {
-        "上海": 10,
+        "上海": 8,
         "深圳": 3
     }
     sheet_list = list(op_dict.keys())
