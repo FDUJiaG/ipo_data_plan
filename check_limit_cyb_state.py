@@ -27,7 +27,6 @@ def check_limit_cyb_state(
 ):
     # 获配情况路径
     hp_dir = os.path.join(r_path, "hpqk_data")
-    save_name = "限售股股卖出分配周报"
 
     # 生成目前更新最全的PB名单以及新股账户对应表
     deal_plan_path = os.path.join(root_path, "deal_plan")
@@ -101,13 +100,17 @@ def check_limit_cyb_state(
             # 标准化清洗股票代码
             wind_stock = clear_code(stock_item)
 
-            # 获取该股的限售形式
+            # 获取该股的限售形式及限售的产品
             stock_state = ""
+            lucky_list = ""
             for code_item, lucky_item, state_item in zip(df_zero["代码"], df_zero["中签配售对象"], df_zero["备注"]):
                 if wind_stock == clear_code(code_item):
                     stock_state = get_limit_state(state_item)
                     lucky_list = lucky_str_to_list(lucky_item)
                     break
+
+            print(print_info(), end=" ")
+            print("Get the Lucky list: {}".format(lucky_list))
 
             # 获取处理时间
             # s_date = datetime.strftime(
@@ -236,6 +239,7 @@ def get_df_plan(file_n, col_lst):
 def lucky_str_to_list(lk_str):
     # 配售对象字符串拆解
     lk_list = list()
+    lk_str = lk_str.replace(",", "，")
     tmp_list = lk_str.split("，")
     for tmp_item in tmp_list:
         if "/" in tmp_item:
@@ -364,7 +368,7 @@ if __name__ == '__main__':
     op_day = time.strftime("%Y-%m-%d")
 
     stock_list = [
-       "300901"
+       "300903"
     ]
 
     w.start()
