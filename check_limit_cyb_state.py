@@ -1,12 +1,15 @@
 import os
 import re
 import time
+import math
 from datetime import datetime, timedelta
 import pandas as pd
 from generate_pb_list import print_info, generate_pb_list
-from common_utils import del_list, add_acc_sec, ns_col, self_operation, jy_ap_col
+from common_utils import self_operation, jy_ap_col, station_confirm, station_head_dict, station_num_list_dict
+from common_utils import limit_mark_dict
 from ipo_week_assign import get_data_list, get_pb_list, get_acc_sec, drop_self_op
 from get_limit_sell_product import get_file_list
+from check_old_stock import file_scan
 from WindPy import w
 
 import warnings
@@ -27,6 +30,12 @@ def check_limit_cyb_state(
 ):
     # 获配情况路径
     hp_dir = os.path.join(r_path, "hpqk_data")
+    gzb_dir = os.path.join(root_path, "gzb_data")
+
+    # 估值表格式
+    gzb_file_type = [".xlsx", ".xls"]
+    # 估值表文件列表
+    gzb_file_list = get_gzb_file_list(gzb_dir, gzb_file_type)
 
     # 生成目前更新最全的PB名单以及新股账户对应表
     deal_plan_path = os.path.join(root_path, "deal_plan")
@@ -43,19 +52,19 @@ def check_limit_cyb_state(
     # 获取以往的交易安排
     key_word = "股票交易安排"
     data_dir = os.path.join(r_path, "xsg_plan")
-    file_list = get_file_list(data_dir, key_word, op_type)
+    op_file_list = get_file_list(data_dir, key_word, op_type)
 
-    if not file_list:
+    if not op_file_list:
         return False
     # 每次检查一个以往的交易安排来确定限售股
-    elif len(file_list) != 1:
+    elif len(op_file_list) != 1:
         print(print_info("E"), end=" ")
         print("Only one limit sell plan can be run!")
         return False
 
     # 获取上市时的交易安排
     df_plan = pd.DataFrame(columns=jy_ap_col[:-1])
-    for file in file_list:
+    for file in op_file_list:
         file_path = os.path.join(data_dir, file)
         df_tmp = get_df_plan(file_path, jy_ap_col)
         if type(df_tmp) == bool and df_tmp is False:
@@ -191,6 +200,14 @@ def check_limit_cyb_state(
                     print("The {} is Error".format(item))
                     return False
 
+                # 获取估值表里面精确的股数
+                product_gzb_path = get_product_gzb_path(item, gzb_file_list)
+                gzb_acc_num = get_stock_number_from_gzb(stock_item, item, product_gzb_path)
+                if abs(limit_num - gzb_acc_num) <= 1:
+                    limit_num = gzb_acc_num
+                else:
+                    state = "【数量待确认】 " + state
+
                 df_out = df_out.append(
                     {
                         "账户": item,
@@ -200,7 +217,7 @@ def check_limit_cyb_state(
                         "交易员": "",
                         "获配数量": num,
                         "限售股数量": limit_num,
-                        "估值表数量": "开发中",
+                        "估值表数量": gzb_acc_num,
                         "备注": state
                     },
                     ignore_index=True
@@ -351,11 +368,114 @@ def get_raw_hp_data(s_code, hp_name, hp_path, ipo_p, f_type="xlsx"):
 
 def fullname_to_short(f_name):
     # 将产品名称清洗为标准化简称
-    tmp_name = f_name.split("迎水")[1]
+    if "迎水" in f_name:
+        tmp_name = f_name.split("迎水")[1]
+    else:
+        tmp_name = f_name
     tmp_name = tmp_name.replace("证券", "").replace("私募", "").replace("投资", "").replace("基金", "")
     short_name = tmp_name.replace("龙凤呈祥", "龙凤").replace("安枕飞天", "安飞")
     short_name = short_name.replace("东方赢家", "稳健")
     return short_name
+
+
+def get_gzb_file_list(gzb_dir, op_file_type):
+    # 获取估值表的文件列表
+    file_list = file_scan(gzb_dir)
+    file_list_copy = file_list.copy()
+    op_file_type_plus = [type_item.split(".")[-1] for type_item in op_file_type]
+
+    for file_item in file_list_copy:
+        if file_item.split(".")[-1] not in op_file_type_plus:
+            file_list.remove(file_item)
+            print(print_info(), end=" ")
+            print("remove the file {}".format(file_item))
+
+    # 根据产品名称，如果出现多次，则删除先前出现的文件名
+    file_list = sorted(file_list)
+    file_list_copy = file_list.copy()
+    if "华资" not in file_list_copy[0]:
+        cp_temp = file_list_copy[0].split("迎水")[-1].split("私募")[0].split("证券")[0]
+    else:
+        cp_temp = "华资" + file_list_copy[0].split("迎水")[-1].split("私募")[0].split("证券")[0]
+    for idx, file_item in zip(range(len(file_list_copy[1:])), file_list_copy[1:]):
+        if "华资" not in file_item:
+            cp_name = file_item.split("迎水")[-1].split("私募")[0].split("证券")[0]
+        else:
+            cp_name = "华资" + file_item.split("迎水")[-1].split("私募")[0].split("证券")[0]
+        if cp_temp == cp_name:
+            file_list.remove(file_list_copy[idx])
+            print(print_info(), end=" ")
+            print("ignore the file {}".format(file_list_copy[idx]))
+        cp_temp = cp_name
+
+    return file_list
+
+
+def get_product_gzb_path(p_name, gzb_list):
+    # 对于某产品，获取其相应的估值表
+    prd_gzb_path = ""
+    for gzb_item in gzb_list:
+        # print(gzb_item.replace("迎水", "").rsplit("\\")[-1])
+        tmp_path = fullname_to_short(gzb_item.replace("迎水", "").rsplit("\\")[-1])
+        # print(tmp_path, gzb_item)
+        if p_name in tmp_path:
+            prd_gzb_path = gzb_item
+            break
+    return prd_gzb_path
+
+
+def get_stock_number_from_gzb(s_code, p_name, gzb_path, is_limit=True):
+    # 获取股票相应的股数
+    check_stock = clear_code(str(s_code)).split(".")[0]
+    station = station_confirm(gzb_path)
+
+    gzb_df = pd.read_excel(gzb_path, header=station_head_dict[station])
+
+    # 获取表头列
+    check_col = gzb_df.columns[0]
+    # 获取数据列
+    num_col = gzb_df.columns[station_num_list_dict[station]]
+    df_tmp = gzb_df[[check_col, num_col]].dropna(subset=[check_col])
+    check_list = list(df_tmp[check_col])
+    num_list = list(df_tmp[num_col])
+
+    code_list = list()
+    stock_num_list = list()
+    for check_item, num_item in zip(check_list, num_list):
+        digit_item = "".join(list(filter(str.isdigit, str(check_item))))
+        if len(digit_item) > 0:
+            code_list.append(digit_item)
+            stock_num_list.append(num_item)
+
+    if len(code_list) != len(stock_num_list):
+        print(print_info("E"), end=" ")
+        print("Code list length: {} is not equal to number list length:{}".format(code_list, stock_num_list))
+
+    # 切分账户
+    # print(p_name, station)
+    stock_limit_mark = limit_mark_dict[station]
+    if stock_limit_mark is None:
+        new_check_list = code_list
+        new_stock_num_list = stock_num_list
+    else:
+        stock_limit_idx = code_list.index(stock_limit_mark)
+        if not is_limit:
+            new_check_list = code_list[:stock_limit_idx]
+            new_stock_num_list = stock_num_list[:stock_limit_idx]
+        else:
+            new_check_list = code_list[stock_limit_idx:]
+            new_stock_num_list = stock_num_list[stock_limit_idx:]
+
+    check_stock_num = ""
+    for new_check_item, new_stock_num_item in zip(new_check_list, new_stock_num_list):
+        # print(new_check_item, new_stock_num_item)
+        if len(new_check_item) >= 12 and check_stock == new_check_item[-6:]:
+            if not math.isnan(new_stock_num_item):
+                # 去除空值
+                check_stock_num = int(new_stock_num_item)
+                break
+
+    return check_stock_num
 
 
 if __name__ == '__main__':
@@ -364,11 +484,10 @@ if __name__ == '__main__':
     op_file_name = "创业板网下申购配售统计"
     out_dir_name = "xsg_output"
     out_file_name = "限售股卖出分配"
-    # op_file_type = ".xlsx"
     op_day = time.strftime("%Y-%m-%d")
 
     stock_list = [
-       "300903"
+       "300884"
     ]
 
     w.start()
@@ -380,7 +499,11 @@ if __name__ == '__main__':
         out_dir=out_dir_name,
         out_file=out_file_name,
         stock=stock_list, op_date=time.strftime("%Y-%m-%d"))
-    # print(df)
-
     w.close()
-    # df.to_excel("test.xlsx")
+
+    # file_type = [".xlsx", ".xls"]
+    # gzb_dir = os.path.join(root_path, "gzb_data")
+    # file_list = get_gzb_file_list(gzb_dir, file_type)
+    # # print(file_list)
+    # fp = get_product_gzb_path("龙凤3号", file_list)
+    # print(get_stock_number_from_gzb("300884", "龙凤3号", fp))

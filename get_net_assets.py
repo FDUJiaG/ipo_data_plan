@@ -2,7 +2,7 @@ import os
 import time
 import json
 import pandas as pd
-from ns_w_assign import get_data_list, print_info
+from ipo_week_assign import get_data_list, print_info
 from common_utils import station_confirm, station_head_dict, net_asset_loc_dict
 from check_old_stock import file_scan
 

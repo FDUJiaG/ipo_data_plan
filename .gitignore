@@ -133,4 +133,5 @@ dmypy.json
 *.xlsx
 *.html
 .idea/
+*.zip
 bak/    for item in raw_df:

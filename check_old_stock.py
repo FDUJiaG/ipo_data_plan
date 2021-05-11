@@ -25,7 +25,7 @@ def main():
     op_date = time.strftime('%Y%m%d', time.localtime(time.time()))  # 处理日期
     output_path = os.path.join(root_path, output_dir)
     op_dict = {
-        "上海": 50,
+        "上海": 60,
         "深圳": 50
     }
     sheet_list = list(op_dict.keys())
