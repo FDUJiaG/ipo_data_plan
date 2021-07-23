@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from generate_pb_list import print_info, generate_pb_list
 from common_utils import self_operation, jy_ap_col, station_confirm, station_head_dict, station_num_list_dict
-from common_utils import limit_mark_dict
+from common_utils import limit_mark_dict, unlimited_mark_dict
 from ipo_week_assign import get_data_list, get_pb_list, get_acc_sec, drop_self_op
 from get_limit_sell_product import get_file_list
 from check_old_stock import file_scan
@@ -153,7 +153,9 @@ def check_limit_cyb_state(
             hp_data_col = hp_data.columns.to_list()
 
             # 循环获配表的产品名称和数量
+            delta_count = 0
             for item, num in zip(hp_data[hp_data_col[0]], hp_data[hp_data_col[1]]):
+                item = fullname_to_short(item)
                 # 摇号限售只考虑部分账户
                 if stock_state == "摇号":
                     if item not in lucky_list:
@@ -161,7 +163,8 @@ def check_limit_cyb_state(
                     else:
                         limit_num = num
                 else:
-                    limit_num = int(round(num / 10, 0))
+                    # limit_num = int(round(num / 10, 0))
+                    limit_num = math.ceil(num / 10)
 
                 account = ""
                 qs_name = ""
@@ -180,7 +183,7 @@ def check_limit_cyb_state(
                         count += 1
 
                 if count > 1:
-                    print(print_info(), end=" ")
+                    print(print_info("E"), end=" ")
                     print("The {} is Error".format(item))
                     return False
 
@@ -202,12 +205,16 @@ def check_limit_cyb_state(
 
                 # 获取估值表里面精确的股数
                 product_gzb_path = get_product_gzb_path(item, gzb_file_list)
-                gzb_acc_num = get_stock_number_from_gzb(stock_item, item, product_gzb_path)
-                if abs(limit_num - gzb_acc_num) <= 1:
-                    limit_num = gzb_acc_num
+                if len(product_gzb_path) > 1:
+                    gzb_acc_num = get_stock_number_from_gzb(stock_item, item, product_gzb_path)
+                    if type(gzb_acc_num) is int and abs(limit_num - gzb_acc_num) <= 1:
+                        limit_num = gzb_acc_num
+                    else:
+                        state = "【数量待确认】 " + state
+                        delta_count += 1
                 else:
-                    state = "【数量待确认】 " + state
-
+                    gzb_acc_num = ''
+                    state = "【无法获取估值表】 " + state
                 df_out = df_out.append(
                     {
                         "账户": item,
@@ -229,7 +236,10 @@ def check_limit_cyb_state(
             print("Get the output data sample of {}:\n{}".format(stock, df_out.head()))
 
             # 文件存储
-            output_file = "【{}】{}【{}限售】{}".format(hp_name, out_file, stock_state, op_type)
+            if delta_count / len(hp_data[hp_data_col[0]]) > 0.9:
+                output_file = "【异】【{}】{}【{}限售】{}".format(hp_name, out_file, stock_state, op_type)
+            else:
+                output_file = "【{}】{}【{}限售】{}".format(hp_name, out_file, stock_state, op_type)
             output_path = os.path.join(r_path, out_dir, output_file)
             df_save.to_excel(output_path, index=None)
             print(print_info(), end=" ")
@@ -326,9 +336,13 @@ def get_hp_data(s_code, hp_name, hp_path, ipo_p, f_type="xlsx"):
             # print(round(new_df[hp_name][0] / 47.33))
         else:
             return False
+        # 去除一些缺失项
         new_df.dropna(inplace=True)
+        new_df = new_df[new_df[new_name] != "—"]
+        new_df.reset_index(drop=True, inplace=True)
         # 根据金额换算成股数
-        new_df[new_name] = round(new_df[new_name] / ipo_p).astype("int")
+        new_df[new_name] = (new_df[new_name] / ipo_p).astype("int")
+        # new_df[new_name] = round(new_df[new_name] / ipo_p).astype("int")
         print(print_info(), end=" ")
         print("Get the huo_pei data sample of {}:\n{}".format(s_code, new_df.head()))
     elif f_type == "xls":
@@ -367,6 +381,9 @@ def get_raw_hp_data(s_code, hp_name, hp_path, ipo_p, f_type="xlsx"):
 
 
 def fullname_to_short(f_name):
+    # 异常情况替换
+    if "华资迎水" in f_name:
+        f_name = f_name.replace("华资迎水", "华资")
     # 将产品名称清洗为标准化简称
     if "迎水" in f_name:
         tmp_name = f_name.split("迎水")[1]
@@ -374,7 +391,7 @@ def fullname_to_short(f_name):
         tmp_name = f_name
     tmp_name = tmp_name.replace("证券", "").replace("私募", "").replace("投资", "").replace("基金", "")
     short_name = tmp_name.replace("龙凤呈祥", "龙凤").replace("安枕飞天", "安飞")
-    short_name = short_name.replace("东方赢家", "稳健")
+    short_name = short_name.replace("东方赢家", "稳健").replace("重信臻选价值", "重信")
     return short_name
 
 
@@ -417,7 +434,7 @@ def get_product_gzb_path(p_name, gzb_list):
     for gzb_item in gzb_list:
         # print(gzb_item.replace("迎水", "").rsplit("\\")[-1])
         tmp_path = fullname_to_short(gzb_item.replace("迎水", "").rsplit("\\")[-1])
-        # print(tmp_path, gzb_item)
+        # print(tmp_path)
         if p_name in tmp_path:
             prd_gzb_path = gzb_item
             break
@@ -458,6 +475,8 @@ def get_stock_number_from_gzb(s_code, p_name, gzb_path, is_limit=True):
         new_check_list = code_list
         new_stock_num_list = stock_num_list
     else:
+        if stock_limit_mark not in code_list:
+            stock_limit_mark = unlimited_mark_dict[station]
         stock_limit_idx = code_list.index(stock_limit_mark)
         if not is_limit:
             new_check_list = code_list[:stock_limit_idx]
@@ -487,7 +506,7 @@ if __name__ == '__main__':
     op_day = time.strftime("%Y-%m-%d")
 
     stock_list = [
-       "300884"
+       "300933"
     ]
 
     w.start()

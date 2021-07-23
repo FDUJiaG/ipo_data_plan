@@ -134,4 +134,5 @@ dmypy.json
 *.html
 .idea/
 *.zip
-bak/    for item in raw_df:
+bak/
+gzb_data/

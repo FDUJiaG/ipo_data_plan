@@ -27,8 +27,8 @@ def main():
         return False
 
     op_dict = {
-        "上海": 16,
-        "深圳": 4
+        "上海": 12,
+        "深圳": 2
     }
     sheet_list = list(op_dict.keys())
     info_list = ['代码', '名称']
