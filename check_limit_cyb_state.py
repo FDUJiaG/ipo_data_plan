@@ -93,6 +93,7 @@ def check_limit_cyb_state(
     df_zero = get_data_list(r_path, op_dir, op_file, op_type, sheet_name, head_list=[1])
     df_zero.dropna(inplace=True)
     df_zero.reset_index(drop=True, inplace=True)
+    # print(r_path, op_dir, op_file, op_type, sheet_name, df_zero)
 
     if type(df_zero) is bool and df_zero is False:
         return False
@@ -506,7 +507,7 @@ if __name__ == '__main__':
     op_day = time.strftime("%Y-%m-%d")
 
     stock_list = [
-       "300933"
+       "300963"
     ]
 
     w.start()

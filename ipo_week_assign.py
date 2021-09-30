@@ -28,11 +28,12 @@ def main():
 
     op_dict = {
         "上海": 12,
-        "深圳": 2
+        "深圳": 5
     }
     sheet_list = list(op_dict.keys())
     info_list = ['代码', '名称']
 
+    # 分为上海和深圳两个 sheet
     df = get_data_list(root_path, op_dir_name, op_file_name, op_file_type, sheet_list)
 
     if type(df) is bool and df is False:
@@ -43,6 +44,7 @@ def main():
 
     ns_op = dict()
     for key in op_dict.keys():
+        df[key].dropna(subset=[df[key].columns[1]], how="any", inplace=True)
         df_item = df[key].tail(op_dict[key])
         ns_dict, ns_col_copy = op_df(df_item, del_list, pb_list, ns_col, info_list)
         ns_op[key] = get_ns_op(ns_dict, ns_col_copy, acc_sec)
